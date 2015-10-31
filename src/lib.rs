@@ -1,5 +1,3 @@
-pub mod ui;
-
 use std::fs::File;
 use std::io::*;
 use std::path::Path;
@@ -21,8 +19,8 @@ impl Chunks {
         };
         lookup
     }
-    fn get_line(self: &Self, index: usize) {
-        self.lines.get(index);
+    fn get_line(self: &Self, index: usize) -> Option<&String> {
+        self.lines.get(index)
     }
     pub fn new(lines: Vec<String>) -> Chunks {
         Chunks {
@@ -42,8 +40,8 @@ pub struct Match {
 impl fmt::Display for Match {
     fn fmt(self: &Self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "({}..{})->({}..{})",
-               self.start_pos_1, self.end_pos_1,
-               self.start_pos_2, self.end_pos_2)
+               self.start_pos_1 + 1, self.end_pos_1 + 1,
+               self.start_pos_2 + 1, self.end_pos_2 + 1)
     }
 }
 
@@ -78,31 +76,58 @@ fn matching_lines(l: &String, chunks: &Chunks) -> Vec<usize> {
     }
 }
 
-fn make_match(chunks1: &Chunks, index1: usize, chunks2: &Chunks, index2: usize) -> Match {
-    let mut search_index_1 = index1;
-    let mut search_index_2 = index2;
+enum Direction {
+    Forward,
+    Reverse
+}
+
+fn search_out(chunks1: &Chunks, start_index_1: usize,
+              chunks2: &Chunks, start_index_2: usize,
+              direction: Direction) -> (usize, usize) {
+    let mut search_index_1 = start_index_1;
+    let mut search_index_2 = start_index_2;
 
     loop {
-        if search_index_1 == 0 || search_index_2 == 0 {
+        let check_index_1 = match direction {
+            Direction::Forward => search_index_1 + 1,
+            Direction::Reverse => search_index_1 - 1
+        };
+        let line_1 = match chunks1.get_line(check_index_1) {
+            Some(l) => l,
+            None => break
+        };
+
+        let check_index_2 = match direction {
+            Direction::Forward => search_index_2 + 1,
+            Direction::Reverse => search_index_2 - 1
+        };
+        let line_2 = match chunks2.get_line(check_index_2) {
+            Some(l) => l,
+            None => break
+        };
+
+        if !line_1.eq(line_2) {
             break;
         }
 
-        let line_1 = chunks1.get_line(search_index_1 - 1);
-        let line_2 = chunks2.get_line(search_index_2 - 1);
-
-        if !line_1.eq(&line_2) {
-            break;
-        }
-
-        search_index_1 -= 1;
-        search_index_2 -= 1;
+        search_index_1 = check_index_1;
+        search_index_2 = check_index_2;
     }
 
+    return (search_index_1, search_index_2);
+}
+
+fn make_match(chunks1: &Chunks, index1: usize, chunks2: &Chunks, index2: usize) -> Match {
+    let (match_start_1, match_start_2) =
+        search_out(chunks1, index1, chunks2, index2, Direction::Forward);
+    let (match_end_1, match_end_2) =
+        search_out(chunks1, index1, chunks2, index2, Direction::Reverse);
+
     Match {
-        start_pos_1: search_index_1,
-        end_pos_1: search_index_2,
-        start_pos_2: index2,
-        end_pos_2: index2
+        start_pos_1: match_start_1,
+        start_pos_2: match_start_2,
+        end_pos_1: match_end_1,
+        end_pos_2: match_end_2,
     }
 }
 
