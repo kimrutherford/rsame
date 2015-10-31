@@ -3,6 +3,7 @@ use std::io::*;
 use std::path::Path;
 use std::iter::Iterator;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt;
 
 struct Chunks {
@@ -35,6 +36,17 @@ pub struct Match {
     end_pos_1: usize,
     start_pos_2: usize,
     end_pos_2: usize
+}
+
+impl Clone for Match {
+    fn clone(self: &Self) -> Match {
+        return Match {
+            start_pos_1: self.start_pos_1,
+            end_pos_1: self.end_pos_1,
+            start_pos_2: self.start_pos_2,
+            end_pos_2: self.end_pos_2,
+        }
+    }
 }
 
 impl fmt::Display for Match {
@@ -81,7 +93,8 @@ enum Direction {
     Reverse
 }
 
-fn search_out(chunks1: &Chunks, start_index_1: usize,
+fn search_out(seen_matching_lines: &mut HashSet<(usize,usize)>,
+              chunks1: &Chunks, start_index_1: usize,
               chunks2: &Chunks, start_index_2: usize,
               direction: Direction) -> (usize, usize) {
     let mut search_index_1 = start_index_1;
@@ -112,16 +125,21 @@ fn search_out(chunks1: &Chunks, start_index_1: usize,
 
         search_index_1 = check_index_1;
         search_index_2 = check_index_2;
+
+        seen_matching_lines.insert((search_index_1, search_index_2));
     }
 
     return (search_index_1, search_index_2);
 }
 
-fn make_match(chunks1: &Chunks, index1: usize, chunks2: &Chunks, index2: usize) -> Match {
+fn make_match(seen_matching_lines: &mut HashSet<(usize,usize)>,
+              chunks1: &Chunks, index1: usize, chunks2: &Chunks, index2: usize) -> Match {
     let (match_start_1, match_start_2) =
-        search_out(chunks1, index1, chunks2, index2, Direction::Forward);
+        search_out(seen_matching_lines,
+                   chunks1, index1, chunks2, index2, Direction::Forward);
     let (match_end_1, match_end_2) =
-        search_out(chunks1, index1, chunks2, index2, Direction::Reverse);
+        search_out(seen_matching_lines,
+                   chunks1, index1, chunks2, index2, Direction::Reverse);
 
     Match {
         start_pos_1: match_start_1,
@@ -134,11 +152,18 @@ fn make_match(chunks1: &Chunks, index1: usize, chunks2: &Chunks, index2: usize) 
 fn compare(chunks1: &Chunks, chunks2: &Chunks) -> Vec<Match> {
     let mut matches: Vec<Match> = Vec::new();
 
+    let mut seen_matching_lines: HashSet<(usize, usize)> = HashSet::new();
+
     for (index1, line) in chunks1.lines.iter().enumerate() {
         let matched_lines = matching_lines(line, chunks2);
 
         for index2 in matched_lines {
-            matches.push(make_match(chunks1, index1, chunks2, index2))
+            if !seen_matching_lines.contains(&(index1, index2)) {
+                let this_match =
+                    make_match(&mut seen_matching_lines, chunks1, index1, chunks2, index2);
+                seen_matching_lines.insert((index1, index2));
+                matches.push(this_match);
+            }
         }
     }
 
