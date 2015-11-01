@@ -101,6 +101,10 @@ fn search_out(seen_matching_lines: &mut HashSet<(usize,usize)>,
     let mut search_index_2 = start_index_2;
 
     loop {
+        if search_index_1 == 0 || search_index_2 == 0 {
+            break;
+        }
+
         let check_index_1 = match direction {
             Direction::Forward => search_index_1 + 1,
             Direction::Reverse => search_index_1 - 1
