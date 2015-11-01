@@ -140,10 +140,10 @@ fn make_match(seen_matching_lines: &mut HashSet<(usize,usize)>,
               chunks1: &Chunks, index1: usize, chunks2: &Chunks, index2: usize) -> Match {
     let (match_start_1, match_start_2) =
         search_out(seen_matching_lines,
-                   chunks1, index1, chunks2, index2, Direction::Forward);
+                   chunks1, index1, chunks2, index2, Direction::Reverse);
     let (match_end_1, match_end_2) =
         search_out(seen_matching_lines,
-                   chunks1, index1, chunks2, index2, Direction::Reverse);
+                   chunks1, index1, chunks2, index2, Direction::Forward);
 
     Match {
         start_pos_1: match_start_1,
