@@ -1,3 +1,7 @@
+#![feature(plugin)]
+#![plugin(regex_macros)]
+extern crate regex;
+
 use std::fs::File;
 use std::io::*;
 use std::path::Path;
@@ -12,20 +16,31 @@ struct Chunks {
 }
 
 impl Chunks {
-    fn make_lookup(lines: &Vec<String>) -> HashMap<String, Vec<usize>> {
+    fn make_lookup(opts: &HashMap<&str, &str>,
+                   lines: &Vec<String>) -> HashMap<String, Vec<usize>> {
         let mut lookup: HashMap<String, Vec<usize>> = HashMap::new();
+        let ws_re = regex!(r"(\s+)");
         for (i,s) in lines.iter().enumerate() {
-            let v = lookup.entry(s.clone()).or_insert(Vec::new());
-            v.push(i);
+            let fixed_ws_string =
+                if opts.contains_key("ignore-whitespace") {
+                    ws_re.replace_all(s, " ")
+                } else {
+                    s.clone()
+                };
+            if !opts.contains_key("ignore-blank-lines") ||
+                (s.len() > 0 && !ws_re.is_match(s)) {
+                    let v = lookup.entry(fixed_ws_string.clone()).or_insert(Vec::new());
+                    v.push(i);
+                }
         };
         lookup
     }
     fn get_line(self: &Self, index: usize) -> Option<&String> {
         self.lines.get(index)
     }
-    pub fn new(lines: Vec<String>) -> Chunks {
+    pub fn new(opts: &HashMap<&str, &str>, lines: Vec<String>) -> Chunks {
         Chunks {
-            lookup: Chunks::make_lookup(&lines),
+            lookup: Chunks::make_lookup(opts, &lines),
             lines: lines,
         }
     }
@@ -57,7 +72,7 @@ impl fmt::Display for Match {
     }
 }
 
-fn read(path: &Path) -> Chunks {
+fn read(opts: &HashMap<&str, &str>,path: &Path) -> Chunks {
     let display = path.display();
     let file = match File::open(&path) {
         Err(why) => panic!("couldn't open {}: {}", display,
@@ -70,15 +85,16 @@ fn read(path: &Path) -> Chunks {
 
     let lines: Vec<_> = reader.lines().map(|l| l.unwrap()).collect();
 
-    Chunks::new(lines)
+    Chunks::new(opts, lines)
 
 }
 
-pub fn compare_files(path1: &Path, path2: &Path) -> Vec<Match> {
-    let chunks1 = read(path1);
-    let chunks2 = read(path2);
+pub fn compare_files(opts: &HashMap<&str, &str>,
+                     path1: &Path, path2: &Path) -> Vec<Match> {
+    let chunks1 = read(opts, path1);
+    let chunks2 = read(opts, path2);
 
-    return compare(&chunks1, &chunks2);
+    return compare(opts, &chunks1, &chunks2);
 }
 
 fn matching_lines(l: &String, chunks: &Chunks) -> Vec<usize> {
@@ -93,7 +109,13 @@ enum Direction {
     Reverse
 }
 
-fn search_out(seen_matching_lines: &mut HashSet<(usize,usize)>,
+fn eq_ignoring_whitespace(str1: &str, str2: &str) -> bool {
+    let ws_re = regex!(r"(\s+)");
+    ws_re.replace_all(str1, " ").eq(&ws_re.replace_all(str2, " "))
+}
+
+fn search_out(opts: &HashMap<&str, &str>,
+              seen_matching_lines: &mut HashSet<(usize,usize)>,
               chunks1: &Chunks, start_index_1: usize,
               chunks2: &Chunks, start_index_2: usize,
               direction: Direction) -> (usize, usize) {
@@ -123,8 +145,14 @@ fn search_out(seen_matching_lines: &mut HashSet<(usize,usize)>,
             None => break
         };
 
-        if !line_1.eq(line_2) {
-            break;
+        if opts.contains_key("ignore-whitespace") {
+            if eq_ignoring_whitespace(line_1, line_2) {
+                break;
+            }
+        } else {
+            if !line_1.eq(line_2) {
+                break;
+            }
         }
 
         search_index_1 = check_index_1;
@@ -136,13 +164,14 @@ fn search_out(seen_matching_lines: &mut HashSet<(usize,usize)>,
     return (search_index_1, search_index_2);
 }
 
-fn make_match(seen_matching_lines: &mut HashSet<(usize,usize)>,
+fn make_match(opts: &HashMap<&str, &str>,
+              seen_matching_lines: &mut HashSet<(usize,usize)>,
               chunks1: &Chunks, index1: usize, chunks2: &Chunks, index2: usize) -> Match {
     let (match_start_1, match_start_2) =
-        search_out(seen_matching_lines,
+        search_out(opts, seen_matching_lines,
                    chunks1, index1, chunks2, index2, Direction::Reverse);
     let (match_end_1, match_end_2) =
-        search_out(seen_matching_lines,
+        search_out(opts, seen_matching_lines,
                    chunks1, index1, chunks2, index2, Direction::Forward);
 
     Match {
@@ -153,7 +182,8 @@ fn make_match(seen_matching_lines: &mut HashSet<(usize,usize)>,
     }
 }
 
-fn compare(chunks1: &Chunks, chunks2: &Chunks) -> Vec<Match> {
+fn compare(opts: &HashMap<&str, &str>,
+           chunks1: &Chunks, chunks2: &Chunks) -> Vec<Match> {
     let mut matches: Vec<Match> = Vec::new();
 
     let mut seen_matching_lines: HashSet<(usize, usize)> = HashSet::new();
@@ -164,7 +194,8 @@ fn compare(chunks1: &Chunks, chunks2: &Chunks) -> Vec<Match> {
         for index2 in matched_lines {
             if !seen_matching_lines.contains(&(index1, index2)) {
                 let this_match =
-                    make_match(&mut seen_matching_lines, chunks1, index1, chunks2, index2);
+                    make_match(opts, &mut seen_matching_lines,
+                               chunks1, index1, chunks2, index2);
                 seen_matching_lines.insert((index1, index2));
                 matches.push(this_match);
             }
