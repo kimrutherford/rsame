@@ -142,7 +142,8 @@ fn search_out(opts: &HashMap<&str, &str>,
     let mut search_index_2 = start_index_2;
 
     loop {
-        if search_index_1 == 0 || search_index_2 == 0 {
+        if direction.eq(&Direction::Reverse) &&
+            (search_index_1 == 0 || search_index_2 == 0) {
             break;
         }
 
