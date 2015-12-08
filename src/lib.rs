@@ -204,3 +204,27 @@ fn compare(opts: &HashMap<&str, &str>,
 
     matches
 }
+
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::path::Path;
+    use super::Match;
+    use super::compare_files;
+
+    fn test_comp(opts: &HashMap<&str, &str>, file1: &str, file2: &str) -> Vec<Match> {
+        compare_files(opts, Path::new(file1), Path::new(file2))
+    }
+
+    #[test]
+    fn test_1() {
+        let conf: HashMap<&str, &str> = HashMap::new();
+
+        let res = test_comp(&conf, "test_data/test1/file1", "test_data/test2/file2");
+
+        if res.len() != 2 {
+            panic!();
+        }
+    }
+}
