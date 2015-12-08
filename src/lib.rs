@@ -72,7 +72,7 @@ impl fmt::Display for Match {
     }
 }
 
-fn read(opts: &HashMap<&str, &str>,path: &Path) -> Chunks {
+fn read(opts: &HashMap<&str, &str>, path: &Path) -> Chunks {
     let display = path.display();
     let file = match File::open(&path) {
         Err(why) => panic!("couldn't open {}: {}", display,
