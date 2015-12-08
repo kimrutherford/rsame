@@ -9,6 +9,7 @@ use std::iter::Iterator;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt;
+use regex::Regex;
 
 struct Chunks {
     lines: Vec<String>,
@@ -19,7 +20,7 @@ impl Chunks {
     fn make_lookup(opts: &HashMap<&str, &str>,
                    lines: &Vec<String>) -> HashMap<String, Vec<usize>> {
         let mut lookup: HashMap<String, Vec<usize>> = HashMap::new();
-        let ws_re = regex!(r"(\s+)");
+        let ws_re = whitespace_regex();
         for (i,s) in lines.iter().enumerate() {
             let fixed_ws_string =
                 if opts.contains_key("ignore-whitespace") {
@@ -44,6 +45,20 @@ impl Chunks {
             lines: lines,
         }
     }
+}
+
+fn whitespace_regex() -> Regex
+{
+    regex!(r"(\s+)")
+}
+
+fn squash_whitespace(s: &str) -> String
+{
+    whitespace_regex().replace_all(s, " ")
+}
+
+fn eq_ignoring_whitespace(str1: &str, str2: &str) -> bool {
+    squash_whitespace(str1).eq(&squash_whitespace(str2))
 }
 
 pub struct Match {
@@ -97,21 +112,25 @@ pub fn compare_files(opts: &HashMap<&str, &str>,
     return compare(opts, &chunks1, &chunks2);
 }
 
-fn matching_lines(l: &String, chunks: &Chunks) -> Vec<usize> {
-    match chunks.lookup.get(l) {
+fn matching_lines(opts: &HashMap<&str, &str>,
+                  l: &String, chunks: &Chunks) -> Vec<usize> {
+    let key =
+        if opts.contains_key("ignore-whitespace") {
+            squash_whitespace(l)
+        } else {
+            l.clone()
+        };
+
+    match chunks.lookup.get(&key) {
         Some(v) => v.clone(),
         None => vec![]
     }
 }
 
+#[derive(PartialEq)]
 enum Direction {
     Forward,
     Reverse
-}
-
-fn eq_ignoring_whitespace(str1: &str, str2: &str) -> bool {
-    let ws_re = regex!(r"(\s+)");
-    ws_re.replace_all(str1, " ").eq(&ws_re.replace_all(str2, " "))
 }
 
 fn search_out(opts: &HashMap<&str, &str>,
@@ -146,7 +165,7 @@ fn search_out(opts: &HashMap<&str, &str>,
         };
 
         if opts.contains_key("ignore-whitespace") {
-            if eq_ignoring_whitespace(line_1, line_2) {
+            if !eq_ignoring_whitespace(line_1, line_2) {
                 break;
             }
         } else {
@@ -161,18 +180,18 @@ fn search_out(opts: &HashMap<&str, &str>,
         seen_matching_lines.insert((search_index_1, search_index_2));
     }
 
-    return (search_index_1, search_index_2);
+    (search_index_1, search_index_2)
 }
 
 fn make_match(opts: &HashMap<&str, &str>,
               seen_matching_lines: &mut HashSet<(usize,usize)>,
               chunks1: &Chunks, index1: usize, chunks2: &Chunks, index2: usize) -> Match {
-    let (match_start_1, match_start_2) =
-        search_out(opts, seen_matching_lines,
-                   chunks1, index1, chunks2, index2, Direction::Reverse);
     let (match_end_1, match_end_2) =
         search_out(opts, seen_matching_lines,
                    chunks1, index1, chunks2, index2, Direction::Forward);
+    let (match_start_1, match_start_2) =
+        search_out(opts, seen_matching_lines,
+                   chunks1, index1, chunks2, index2, Direction::Reverse);
 
     Match {
         start_pos_1: match_start_1,
@@ -189,7 +208,7 @@ fn compare(opts: &HashMap<&str, &str>,
     let mut seen_matching_lines: HashSet<(usize, usize)> = HashSet::new();
 
     for (index1, line) in chunks1.lines.iter().enumerate() {
-        let matched_lines = matching_lines(line, chunks2);
+        let matched_lines = matching_lines(opts, line, chunks2);
 
         for index2 in matched_lines {
             if !seen_matching_lines.contains(&(index1, index2)) {
