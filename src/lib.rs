@@ -1,15 +1,13 @@
-#![feature(plugin)]
-#![plugin(regex_macros)]
 extern crate regex;
 
-use std::fs::File;
-use std::io::*;
-use std::path::Path;
-use std::iter::Iterator;
-use std::collections::HashMap;
-use std::collections::HashSet;
-use std::fmt;
+use std::{fs::File,
+          io::*,
+          path::Path,
+          iter::Iterator,
+          collections::{HashSet, HashMap},
+          fmt};
 use regex::Regex;
+#[macro_use] extern crate lazy_static;
 
 struct Chunks {
     lines: Vec<String>,
@@ -19,17 +17,16 @@ struct Chunks {
 impl Chunks {
     fn make_lookup(opts: &HashMap<&str, &str>,
                    lines: &Vec<String>) -> HashMap<String, Vec<usize>> {
-        let mut lookup: HashMap<String, Vec<usize>> = HashMap::new();
-        let ws_re = whitespace_regex();
+        let mut lookup: HashMap<String, Vec<usize>> = HashMap::default();
         for (i,s) in lines.iter().enumerate() {
             let fixed_ws_string =
                 if opts.contains_key("ignore-whitespace") {
-                    ws_re.replace_all(s, " ")
+                    WHITESPACE_RE.replace_all(s, " ").to_string()
                 } else {
                     s.clone()
                 };
             if !opts.contains_key("ignore-blank-lines") ||
-                (s.len() > 0 && !ws_re.is_match(s)) {
+                (s.len() > 0 && !WHITESPACE_RE.is_match(s)) {
                     let v = lookup.entry(fixed_ws_string.clone()).or_insert(Vec::new());
                     v.push(i);
                 }
@@ -47,14 +44,13 @@ impl Chunks {
     }
 }
 
-fn whitespace_regex() -> Regex
-{
-    regex!(r"(\s+)")
+lazy_static! {
+    static ref WHITESPACE_RE: Regex = Regex::new(r"(\s+)").unwrap();
 }
 
 fn squash_whitespace(s: &str) -> String
 {
-    whitespace_regex().replace_all(s, " ")
+    WHITESPACE_RE.replace_all(s, " ").to_string()
 }
 
 fn eq_ignoring_whitespace(str1: &str, str2: &str) -> bool {
@@ -112,18 +108,19 @@ pub fn compare_files(opts: &HashMap<&str, &str>,
     return compare(opts, &chunks1, &chunks2);
 }
 
-fn matching_lines(opts: &HashMap<&str, &str>,
-                  l: &String, chunks: &Chunks) -> Vec<usize> {
-    let key =
-        if opts.contains_key("ignore-whitespace") {
-            squash_whitespace(l)
-        } else {
-            l.clone()
-        };
-
-    match chunks.lookup.get(&key) {
+fn chunk_lookup(chunks: &Chunks, key: impl AsRef<str>) -> Vec<usize> {
+    match chunks.lookup.get(key.as_ref()) {
         Some(v) => v.clone(),
         None => vec![]
+    }
+}
+
+fn matching_lines(opts: &HashMap<&str, &str>,
+                  l: &str, chunks: &Chunks) -> Vec<usize> {
+    if opts.contains_key("ignore-whitespace") {
+        chunk_lookup(chunks, squash_whitespace(l))
+    } else {
+        chunk_lookup(chunks, l)
     }
 }
 

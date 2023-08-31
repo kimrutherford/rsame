@@ -7,4 +7,4 @@ authors = ["Kim Rutherford <kmr@aska.gen.nz>"]
 [dependencies]
 getopts = "*"
 regex = "*"
-regex_macros = "*"
+lazy_static = "*"
