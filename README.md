@@ -1,7 +1,6 @@
-Text::Same in Rust
+Same in Rust
 
 To Do:
-  - display matches nicely
-
+  - everything
 
 
